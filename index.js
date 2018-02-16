@@ -496,7 +496,7 @@ function init() {
         var temp = Models.Ship((Math.random() - 0.5) * 100, (Math.random() - 0.5) * 100, (Math.random() - 0.5) * 100, 1);
         temp.rotate((Math.random() - 0.5) * 100, (Math.random() - 0.5) * 100, (Math.random() - 0.5) * 100);
         temp.label = "ship";
-        temp.movement = "random";
+        temp.movement = "static";
         world.push(temp);
     }
 
