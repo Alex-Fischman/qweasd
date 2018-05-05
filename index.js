@@ -19,6 +19,7 @@ const enemyTurn = topTurn;
 var movementBuffer = { tx: 0, ty: 0, tz: 0, rx: 0, ry: 0, rz: 0 };
 var fire = true;
 const explosionSize = 2;
+const laserSpeed = 5; //laserSpeed is measured in laser-lengths per tick
 
 
 
@@ -375,18 +376,55 @@ var Models = {
             Primitives.Edge(Primitives.Vertex(start.pos[0] - splay, start.pos[1], start.pos[2]), end),
             Primitives.Edge(Primitives.Vertex(start.pos[0], start.pos[1] - splay, start.pos[2]), end)
         ]);
-    },
-
-    Circle: function(x, y, z, size) {
-        var toReturn = Primitives.Vertex(x, y, z);
-        toReturn.draw = function() {
-            ctx.arc(get2d(this.pos)[0], get2d(this.pos)[1], size * dims.min / this.pos[2], 0, 2 * Math.PI);
-            ctx.fill();
-        };
-        return toReturn;
     }
 };
 
+var Circle = function(x, y, z, size) {
+    return {
+        pos: [x, y, z],
+        size: size,
+
+        draw: function() {
+            if (this.visible()) {
+                ctx.arc(get2d(this.pos)[0], get2d(this.pos)[1], size * dims.min / this.pos[2], 0, 2 * Math.PI);
+                ctx.fill();
+            }
+        },
+
+        translate: function(x, y, z) {
+            this.pos = [this.pos[0] + x, this.pos[1] + y, this.pos[2] + z];
+        },
+
+        rotate: function(x, y, z) {
+            //Rotate around X axis
+            var cosX = Math.cos(x);
+            var sinX = Math.sin(x);
+            this.pos = [this.pos[0], (this.pos[1] * cosX) + (this.pos[2] * -sinX), (this.pos[1] * sinX) + (this.pos[2] * cosX)];
+
+            //Rotate around Y axis
+            var cosY = Math.cos(y);
+            var sinY = Math.sin(y);
+            this.pos = [(this.pos[0] * cosY) + (this.pos[2] * sinY), this.pos[1], (this.pos[0] * -sinY) + (this.pos[2] * cosY)];
+
+            //Rotate around Z axis
+            var cosZ = Math.cos(z);
+            var sinZ = Math.sin(z);
+            this.pos = [(this.pos[0] * cosZ) + (this.pos[1] * -sinZ), (this.pos[0] * sinZ) + (this.pos[1] * cosZ), this.pos[2]];
+        },
+
+        visible: function() {
+            return this.pos[2] > 0 && this.pos[2] < dist;
+        },
+
+        dist: function(vertex) {
+            return Math.sqrt(
+                Math.pow(this.pos[0] - vertex.pos[0], 2) +
+                Math.pow(this.pos[1] - vertex.pos[1], 2) +
+                Math.pow(this.pos[2] - vertex.pos[2], 2)
+            );
+        }
+    };
+};
 
 
 var movement = {
@@ -402,18 +440,6 @@ var movement = {
         };
     },
 
-    random: function(arr) {
-        return {
-            tx: (Math.random() - 0.5) * 2 * enemyMove,
-            ty: (Math.random() - 0.5) * 2 * move,
-            tz: (Math.random() - 0.5) * 2 * move,
-            rx: (Math.random() - 0.5) * 2 * turn,
-            ry: (Math.random() - 0.5) * 2 * turn,
-            rz: (Math.random() - 0.5) * 2 * turn,
-            fire: false
-        };
-    },
-    
     forward: function(arr) {
         const dir = arr[1];
         return {
@@ -426,26 +452,27 @@ var movement = {
             fire: false
         };
     },
-    
+
     target: function(arr) {
-        const pos = arr[0];
         const dir = arr[1];
-        
-        //How to aim at player while not aligned to axes?
-        
-        const turnX = 0;
-        //Update pos and dir
-        
-        const turnY = 0;
-        //Update pos and dir
-        
-        const turnZ = 0;
-        //Update pos and dir
-        
+
+        /*
+            Need to figure out how to aim at player while not aligned to axes
+                Figure out how much to turn
+                    Should bring the point at dir onto the z-axis
+                Align to axes
+                Turn that much
+                Undo alignment
+        */
+
+        var turnX = 0;
+        var turnY = 0;
+        var turnZ = 0;
+
         return {
-            tx: 0 /*dir[0] * enemyMove*/ ,
-            ty: 0 /*dir[1] * enemyMove*/ ,
-            tz: 0 /*dir[2] * enemyMove*/ ,
+            tx: 0,
+            ty: 0,
+            tz: 0,
             rx: turnX,
             ry: turnY,
             rz: turnZ,
@@ -496,7 +523,7 @@ function init() {
         var temp = Models.Ship((Math.random() - 0.5) * 100, (Math.random() - 0.5) * 100, (Math.random() - 0.5) * 100, 1);
         temp.rotate((Math.random() - 0.5) * 100, (Math.random() - 0.5) * 100, (Math.random() - 0.5) * 100);
         temp.label = "ship";
-        temp.movement = "static";
+        temp.movement = "target";
         world.push(temp);
     }
 
@@ -617,7 +644,7 @@ function loop() {
                 world = world.filter(function(c, k) {
                     return !(targets.includes(k)) && k != i;
                 });
-                var explosion = Models.Circle(
+                var explosion = Circle(
                     a.edges[0].end.pos[0] - explosionSize / 2,
                     a.edges[0].end.pos[1] - explosionSize / 2,
                     a.edges[0].end.pos[2] - explosionSize / 2,
@@ -627,11 +654,13 @@ function loop() {
                 world.push(explosion);
             }
             else {
-                a.translate(
-                    a.edges[0].end.pos[0] - a.edges[0].start.pos[0],
-                    a.edges[0].end.pos[1] - a.edges[0].start.pos[1],
-                    a.edges[0].end.pos[2] - a.edges[0].start.pos[2]
-                );
+                for (var i = 0; i < laserSpeed; ++i) {
+                    a.translate(
+                        a.edges[0].end.pos[0] - a.edges[0].start.pos[0],
+                        a.edges[0].end.pos[1] - a.edges[0].start.pos[1],
+                        a.edges[0].end.pos[2] - a.edges[0].start.pos[2]
+                    );
+                }
             }
         }
     });
