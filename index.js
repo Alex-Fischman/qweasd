@@ -800,6 +800,7 @@ function loop() {
         img.onload = function() {
             ctx.drawImage(img, -canvas.width / 2, -canvas.height / 2, canvas.width, canvas.height);
             ctx.strokeText("Reload the page to play again.", -canvas.width / 8, canvas.height / 8);
+            ctx.strokeText("Enemy ships destroyed: " + enemiesKilled, -canvas.width / 2, canvas.height / 2);
         };
         img.src = "lose-2.png";
         ctx.drawImage(img, 0, 0);
