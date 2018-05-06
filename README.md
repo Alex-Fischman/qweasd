@@ -1,6 +1,6 @@
 # QWEASD
 
-A small game.
+A space game.
 
 Controlled with:
 
