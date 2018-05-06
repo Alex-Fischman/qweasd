@@ -18,7 +18,8 @@ const enemyTurn = topTurn;
 const enemyAlignBound = enemyTurn;
 
 var movementBuffer = { tx: 0, ty: 0, tz: 0, rx: 0, ry: 0, rz: 0 };
-var fire = true;
+var fire = 0;
+const fireCooldown = 100; //Ticks until next shot can be fired
 const explosionSize = 2;
 const laserSpeed = 5; //laserSpeed is measured in laser-lengths per tick
 
@@ -123,7 +124,6 @@ window.onkeyup = function(event) {
             break;
         case ' ':
             keys.space = false;
-            fire = true;
             break;
     }
 };
@@ -440,8 +440,7 @@ var movement = {
             tz: 0,
             rx: 0,
             ry: 0,
-            rz: 0,
-            fire: false
+            rz: 0
         };
     },
 
@@ -453,8 +452,7 @@ var movement = {
             tz: dir[2] * enemyMove,
             rx: 0,
             ry: 0,
-            rz: 0,
-            fire: false
+            rz: 0
         };
     },
 
@@ -489,8 +487,7 @@ var movement = {
             tz: 0,
             rx: turnX,
             ry: turnY,
-            rz: 0,
-            fire: false
+            rz: 0
         };
     },
 
@@ -528,8 +525,7 @@ var movement = {
                 tz: dir[2] * enemyMove,
                 rx: turnX,
                 ry: turnY,
-                rz: 0,
-                fire: false
+                rz: 0
             };
         }
         else {
@@ -539,8 +535,7 @@ var movement = {
                 tz: 0,
                 rx: turnX,
                 ry: turnY,
-                rz: 0,
-                fire: false
+                rz: 0
             };
         }
     }
@@ -573,6 +568,7 @@ function init() {
     dims.bigY = Math.max(window.innerHeight - window.innerWidth, 0);
     ctx = canvas.getContext("2d");
     ctx.translate(canvas.width / 2, canvas.height / 2);
+    ctx.font = "20pt verdana";
 
     //Make the world
     world = [];
@@ -636,11 +632,14 @@ function loop() {
     if (keys.l) {
         movementBuffer.ry -= turn;
     }
-    if (keys.space && fire) {
+    if (fire > 0) {
+        fire--;
+    }
+    if (keys.space && fire == 0) {
         world.push(Models.Laser(Primitives.Vertex(0, 0, 0), Primitives.Vertex(0, 0, 1), explosionSize / 50));
         world[world.length - 1].label = "laser";
         world[world.length - 1].timer = 60 * 5;
-        fire = false;
+        fire = fireCooldown;
     }
     translate(movementBuffer.tx, movementBuffer.ty, movementBuffer.tz);
     rotate(movementBuffer.rx, movementBuffer.ry, movementBuffer.rz);
@@ -766,26 +765,48 @@ function loop() {
             a.rotate(toMove.rx, toMove.ry, toMove.rz); //'Real' rotation
             a.translate(nosePos[0], nosePos[1], nosePos[2]); //De-center ship
             a.translate(toMove.tx, toMove.ty, toMove.tz); //'Real' translation
-            if (toMove.fire) { /* fire enemy laser */ }
         }
     });
 
     //Render step
     ctx.fillStyle = "black";
-    ctx.fillRect(-canvas.width / 2, -canvas.height / 2,
-        canvas.width, canvas.height);
+    ctx.fillRect(-canvas.width / 2, -canvas.height / 2, canvas.width, canvas.height);
     ctx.strokeStyle = "green";
-    ctx.strokeRect(-dims.min / 50, 0,
-        dims.min / 25, 1);
-    ctx.strokeRect(0, -dims.min / 50,
-        1, dims.min / 25);
+    ctx.strokeRect(-dims.min / 50, 0, dims.min / 25, 1);
+    ctx.strokeRect(0, -dims.min / 50, 1, dims.min / 25);
     ctx.fillStyle = "white";
     ctx.strokeStyle = "white";
     world.forEach(function(a) {
         a.draw();
     });
     //Show score
-    ctx.strokeText("Enemy ships destroyed: " + enemiesKilled, -canvas.width / 2, 0);
+    ctx.strokeText("Enemy ships destroyed: " + enemiesKilled, -canvas.width / 2, canvas.height / 2);
+
+    //Win screen (once all enemies are killed)
+    if (enemiesKilled == 100) {
+        var img = new Image; /*global Image*/
+        img.onload = function() {
+            ctx.drawImage(img, -canvas.width / 2, -canvas.height / 2, canvas.width, canvas.height);
+            ctx.strokeText("Reload the page to play again.", -canvas.width / 8, canvas.height / 8);
+        };
+        img.src = "win-1.jpg";
+        ctx.drawImage(img, 0, 0);
+        return;
+    }
+
+    //Lose screen (if enemy is too close)
+    if (world.some(function(item) {
+            return item.label == "ship" && new Primitives.Vertex(0, 0, 0).dist(item.faces[0].edges[0].start) < 1;
+        })) {
+        var img = new Image; /*global Image*/
+        img.onload = function() {
+            ctx.drawImage(img, -canvas.width / 2, -canvas.height / 2, canvas.width, canvas.height);
+            ctx.strokeText("Reload the page to play again.", -canvas.width / 8, canvas.height / 8);
+        };
+        img.src = "lose-2.png";
+        ctx.drawImage(img, 0, 0);
+        return;
+    }
 
     //Loop
     window.requestAnimationFrame(loop);
