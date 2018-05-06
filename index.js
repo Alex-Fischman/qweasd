@@ -13,13 +13,17 @@ const turn = 1e-4 * Math.PI;
 const topMove = 1e-1 * 2;
 const topTurn = 1e-2 * Math.PI / 2;
 
-const enemyMove = topMove / 2;
+const enemyMove = topMove * 0.9;
 const enemyTurn = topTurn;
+const enemyAlignBound = enemyTurn;
 
 var movementBuffer = { tx: 0, ty: 0, tz: 0, rx: 0, ry: 0, rz: 0 };
 var fire = true;
 const explosionSize = 2;
 const laserSpeed = 5; //laserSpeed is measured in laser-lengths per tick
+
+var enemiesKilled = 0;
+const initialEnemyCount = 100;
 
 
 
@@ -427,6 +431,7 @@ var Circle = function(x, y, z, size) {
 };
 
 
+
 var movement = {
     static: function(arr) {
         return {
@@ -453,21 +458,30 @@ var movement = {
         };
     },
 
-    target: function(arr) {
+    align: function(arr) {
         const dir = arr[1];
 
-        /*
-            Need to figure out how to aim at player while not aligned to axes
-                Figure out how much to turn
-                    Should bring the point at dir onto the z-axis
-                Align to axes
-                Turn that much
-                Undo alignment
-        */
+        const targetDir = [0, 0, 1];
+
+        var turnY = 0;
+        //If dir is left of the yz plane, turn right
+        if (dir[0] < targetDir[0] - enemyAlignBound) {
+            turnY = enemyTurn;
+        }
+        //Else if dir is right of it, turn left
+        else if (dir[0] > targetDir[0] + enemyAlignBound) {
+            turnY = -enemyTurn;
+        }
 
         var turnX = 0;
-        var turnY = 0;
-        var turnZ = 0;
+        //If dir is above the xz plane, turn down
+        if (dir[1] > targetDir[1] + enemyAlignBound) {
+            turnX = enemyTurn;
+        }
+        //Else if dir is below it, turn up
+        else if (dir[1] < targetDir[1] - enemyAlignBound) {
+            turnX = -enemyTurn;
+        }
 
         return {
             tx: 0,
@@ -475,9 +489,60 @@ var movement = {
             tz: 0,
             rx: turnX,
             ry: turnY,
-            rz: turnZ,
+            rz: 0,
             fire: false
         };
+    },
+
+    target: function(arr) {
+        const pos = arr[0];
+        const dir = arr[1];
+
+        const posLength = Math.sqrt(Math.pow(pos[0], 2) + Math.pow(pos[1], 2) + Math.pow(pos[2], 2));
+        const normalPos = [pos[0] / posLength, pos[1] / posLength, pos[2] / posLength];
+        const targetDir = [normalPos[0] * -1, normalPos[1] * -1, normalPos[2] * -1];
+
+        //See align movement for what's happening
+        var turnY = 0;
+        if (dir[0] < targetDir[0] - enemyAlignBound) {
+            turnY = -enemyTurn;
+        }
+        else if (dir[0] > targetDir[0] + enemyAlignBound) {
+            turnY = enemyTurn;
+        }
+        var turnX = 0;
+        if (dir[1] > targetDir[1] + enemyAlignBound) {
+            turnX = -enemyTurn;
+        }
+        else if (dir[1] < targetDir[1] - enemyAlignBound) {
+            turnX = enemyTurn;
+        }
+
+        //Move forward if pointing at player ship
+        if (dir.every(function(item, index) {
+                return item < targetDir[index] + enemyAlignBound && item > targetDir[index] - enemyAlignBound;
+            })) {
+            return {
+                tx: dir[0] * enemyMove,
+                ty: dir[1] * enemyMove,
+                tz: dir[2] * enemyMove,
+                rx: turnX,
+                ry: turnY,
+                rz: 0,
+                fire: false
+            };
+        }
+        else {
+            return {
+                tx: 0,
+                ty: 0,
+                tz: 0,
+                rx: turnX,
+                ry: turnY,
+                rz: 0,
+                fire: false
+            };
+        }
     }
 };
 
@@ -519,7 +584,7 @@ function init() {
             (Math.random() - 0.5) * 100));
     }
     //Enemy ships
-    for (var i = 0; i < 100; ++i) {
+    for (var i = 0; i < initialEnemyCount; ++i) {
         var temp = Models.Ship((Math.random() - 0.5) * 100, (Math.random() - 0.5) * 100, (Math.random() - 0.5) * 100, 1);
         temp.rotate((Math.random() - 0.5) * 100, (Math.random() - 0.5) * 100, (Math.random() - 0.5) * 100);
         temp.label = "ship";
@@ -579,6 +644,7 @@ function loop() {
     }
     translate(movementBuffer.tx, movementBuffer.ty, movementBuffer.tz);
     rotate(movementBuffer.rx, movementBuffer.ry, movementBuffer.rz);
+
     //Slow down
     Object.getOwnPropertyNames(movementBuffer).map(function(name) {
         const val = movementBuffer[name];
@@ -597,6 +663,7 @@ function loop() {
                     0));
         }
     });
+
     //Limit speed
     Object.getOwnPropertyNames(movementBuffer).map(function(name) {
         const val = movementBuffer[name];
@@ -615,23 +682,25 @@ function loop() {
                     val);
         }
     });
+
     //Stop if too slow
     Object.getOwnPropertyNames(movementBuffer).map(function(name) {
         const val = movementBuffer[name];
         movementBuffer[name] = Math.abs(val) < 1e-4 ? 0 : val;
     });
+
     //Environment step
-    //Laser
     world.forEach(function(a, i) {
+        //Laser
         if (a.timer > 0) {
             a.timer--;
         }
-
         if (a.timer === 0) {
             world.splice(i, 1);
         }
         else if (a.label == "laser") {
             var targets = [];
+            //Look for ships within range of laser
             world.forEach(function(b, j) {
                 if (b.label == "ship" &&
                     a.edges[0].end.dist(
@@ -640,9 +709,16 @@ function loop() {
                     targets.push(j);
                 }
             });
+            //If there's a ship, explode
             if (targets.length != 0) {
                 world = world.filter(function(c, k) {
-                    return !(targets.includes(k)) && k != i;
+                    if (!(targets.includes(k))) {
+                        return true;
+                    }
+                    else {
+                        enemiesKilled++;
+                        return false;
+                    }
                 });
                 var explosion = Circle(
                     a.edges[0].end.pos[0] - explosionSize / 2,
@@ -653,6 +729,7 @@ function loop() {
                 explosion.timer = 5;
                 world.push(explosion);
             }
+            //Otherwise, move the laser forward
             else {
                 for (var i = 0; i < laserSpeed; ++i) {
                     a.translate(
@@ -663,13 +740,8 @@ function loop() {
                 }
             }
         }
-    });
-    //Enemy ships
-    world.forEach(function(a) {
-        function avg(arr) {
-            return arr.reduce((a, b) => a + b, 0) / arr.length;
-        }
 
+        //Enemy ships
         if (a.label == "ship") {
             const nosePos = a.faces[0].edges[0].start.pos;
             const backPos = [
@@ -697,6 +769,7 @@ function loop() {
             if (toMove.fire) { /* fire enemy laser */ }
         }
     });
+
     //Render step
     ctx.fillStyle = "black";
     ctx.fillRect(-canvas.width / 2, -canvas.height / 2,
@@ -711,8 +784,17 @@ function loop() {
     world.forEach(function(a) {
         a.draw();
     });
+    //Show score
+    ctx.strokeText("Enemy ships destroyed: " + enemiesKilled, -canvas.width / 2, 0);
+
     //Loop
     window.requestAnimationFrame(loop);
+}
+
+
+
+function avg(arr) {
+    return arr.reduce((a, b) => a + b, 0) / arr.length;
 }
 
 
