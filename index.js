@@ -13,7 +13,7 @@ const turn = 1e-4 * Math.PI;
 const topMove = 1e-1 * 2;
 const topTurn = 1e-2 * Math.PI / 2;
 
-const enemyMove = topMove * 0.9;
+const enemyMove = topMove * 1.5;
 const enemyTurn = topTurn;
 const enemyAlignBound = enemyTurn;
 
@@ -514,30 +514,20 @@ var movement = {
         else if (dir[1] < targetDir[1] - enemyAlignBound) {
             turnX = enemyTurn;
         }
+        
+        //Randomize movement to avoid clustering
+        turnX += (Math.random() - 0.5) / 10;
+        turnY += (Math.random() - 0.5) / 10;
 
-        //Move forward if pointing at player ship
-        if (dir.every(function(item, index) {
-                return item < targetDir[index] + enemyAlignBound && item > targetDir[index] - enemyAlignBound;
-            })) {
-            return {
-                tx: dir[0] * enemyMove,
-                ty: dir[1] * enemyMove,
-                tz: dir[2] * enemyMove,
-                rx: turnX,
-                ry: turnY,
-                rz: 0
-            };
-        }
-        else {
-            return {
-                tx: 0,
-                ty: 0,
-                tz: 0,
-                rx: turnX,
-                ry: turnY,
-                rz: 0
-            };
-        }
+        //Move forward
+        return {
+            tx: dir[0] * enemyMove,
+            ty: dir[1] * enemyMove,
+            tz: dir[2] * enemyMove,
+            rx: turnX,
+            ry: turnY,
+            rz: 0.01
+        };
     }
 };
 
@@ -588,8 +578,16 @@ function init() {
         world.push(temp);
     }
 
-    //Start game loop
-    loop();
+    //Splash screen
+    ctx.fillStyle = "black";
+    ctx.fillRect(-canvas.width / 2, -canvas.height / 2, canvas.width, canvas.height);
+    ctx.strokeStyle = "white";
+    ctx.strokeText("Use Q, W, E, A, S, and D to move your ship.", -canvas.width / 2, -canvas.height / 2 + 20);
+    ctx.strokeText("Use U, I, O, J, K, and L to turn your ship.", -canvas.width / 2, -canvas.height / 2 + 40);
+    ctx.strokeText("Use the spacebar to shoot a missile.", -canvas.width / 2, -canvas.height / 2 + 60);
+    ctx.strokeText("Destroy all of the enemy ships to win!", -canvas.width / 2, -canvas.height / 2 + 80);
+    ctx.strokeText("Dodge the enemies. If one hits you, you lose.", -canvas.width / 2, -canvas.height / 2 + 100);
+    ctx.strokeText("Click to start.", -canvas.width / 2, -canvas.height / 2 + 140);
 }
 
 function loop() {
@@ -820,4 +818,10 @@ function avg(arr) {
 
 
 
+//Setup
 init();
+
+//Start game loop
+window.onclick = function(event) {
+    loop();
+};
