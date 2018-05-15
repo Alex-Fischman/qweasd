@@ -514,7 +514,7 @@ var movement = {
         else if (dir[1] < targetDir[1] - enemyAlignBound) {
             turnX = enemyTurn;
         }
-        
+
         //Randomize movement to avoid clustering
         turnX += (Math.random() - 0.5) / 10;
         turnY += (Math.random() - 0.5) / 10;
@@ -582,12 +582,18 @@ function init() {
     ctx.fillStyle = "black";
     ctx.fillRect(-canvas.width / 2, -canvas.height / 2, canvas.width, canvas.height);
     ctx.strokeStyle = "white";
-    ctx.strokeText("Use Q, W, E, A, S, and D to move your ship.", -canvas.width / 2, -canvas.height / 2 + 20);
-    ctx.strokeText("Use U, I, O, J, K, and L to turn your ship.", -canvas.width / 2, -canvas.height / 2 + 40);
-    ctx.strokeText("Use the spacebar to shoot a missile.", -canvas.width / 2, -canvas.height / 2 + 60);
-    ctx.strokeText("Destroy all of the enemy ships to win!", -canvas.width / 2, -canvas.height / 2 + 80);
-    ctx.strokeText("Dodge the enemies. If one hits you, you lose.", -canvas.width / 2, -canvas.height / 2 + 100);
-    ctx.strokeText("Click to start.", -canvas.width / 2, -canvas.height / 2 + 140);
+    ctx.strokeText("Use Q and E to move your ship up and down.", -canvas.width / 2, -canvas.height / 2 + 20);
+    ctx.strokeText("Use W and S to move your ship forward and back.", -canvas.width / 2, -canvas.height / 2 + 40);
+    ctx.strokeText("Use A and D to move your ship left and right.", -canvas.width / 2, -canvas.height / 2 + 60);
+    ctx.strokeText("Use U and O to spin your ship left and right.", -canvas.width / 2, -canvas.height / 2 + 80);
+    ctx.strokeText("Use I and K to turn your ship up and down.", -canvas.width / 2, -canvas.height / 2 + 100);
+    ctx.strokeText("Use J and L to turn your ship left and right.", -canvas.width / 2, -canvas.height / 2 + 120);
+    ctx.strokeText("Use the spacebar to shoot a missile.", -canvas.width / 2, -canvas.height / 2 + 140);
+    ctx.strokeText("Hit an enemy ship with a missile to destroy it.", -canvas.width / 2, -canvas.height / 2 + 160);
+    ctx.strokeText("Destroy all 100 of the enemy ships to win!", -canvas.width / 2, -canvas.height / 2 + 180);
+    ctx.strokeText("Dodge the enemies. If one rams into you, you lose.", -canvas.width / 2, -canvas.height / 2 + 200);
+    ctx.strokeText("The number of ships you killed is in the bottom left corner.", -canvas.width / 2, -canvas.height / 2 + 220);
+    ctx.strokeText("Click to start.", -canvas.width / 2, -canvas.height / 2 + 260);
 }
 
 function loop() {
@@ -799,7 +805,7 @@ function loop() {
         var img = new Image; /*global Image*/
         img.onload = function() {
             ctx.drawImage(img, -canvas.width / 2, -canvas.height / 2, canvas.width, canvas.height);
-            ctx.strokeText("Reload the page to play again.", -canvas.width / 8, canvas.height / 8);
+            ctx.strokeText("Reload the page to play again.", -canvas.width / 6, canvas.height / 16);
             ctx.strokeText("Enemy ships destroyed: " + enemiesKilled, -canvas.width / 2, canvas.height / 2);
         };
         img.src = "lose-2.png";
