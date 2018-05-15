@@ -592,8 +592,9 @@ function init() {
     ctx.strokeText("Hit an enemy ship with a missile to destroy it.", -canvas.width / 2, -canvas.height / 2 + 160);
     ctx.strokeText("Destroy all 100 of the enemy ships to win!", -canvas.width / 2, -canvas.height / 2 + 180);
     ctx.strokeText("Dodge the enemies. If one rams into you, you lose.", -canvas.width / 2, -canvas.height / 2 + 200);
-    ctx.strokeText("The number of ships you killed is in the bottom left corner.", -canvas.width / 2, -canvas.height / 2 + 220);
-    ctx.strokeText("Click to start.", -canvas.width / 2, -canvas.height / 2 + 260);
+    ctx.strokeText("Watch out for enemies behind you!", -canvas.width / 2, -canvas.height / 2 + 220);
+    ctx.strokeText("The number of ships you killed is in the bottom left corner.", -canvas.width / 2, -canvas.height / 2 + 240);
+    ctx.strokeText("Click to start.", -canvas.width / 2, -canvas.height / 2 + 280);
 }
 
 function loop() {
