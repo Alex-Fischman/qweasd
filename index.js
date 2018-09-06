@@ -1,4 +1,4 @@
-//Canvas
+//Canvas setup
 let canvas = document.getElementById("canvas");
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
@@ -6,44 +6,32 @@ let ctx = canvas.getContext("2d");
 ctx.translate(canvas.width / 2, canvas.height / 2); //Center canvas
 ctx.font = "20pt verdana";
 
-//Rendering constants
+//Constants
 const renderDist = 1e2;
-//Movement constants
-const move = 1e-2; //Movement speed acceleration
-const turn = 1e-4 * Math.PI; //Turning speed acceleration
-const topMove = move * 20; //Max movement speed
-const topTurn = turn * 50; //Max turning speed
+const movementSpeed = 1e-2; //Movement acceleration per tick
+const turningSpeed = 1e-4 * Math.PI; //Turning acceleration per tick
+const topMove = movementSpeed * 20; //Max movement speed
+const topTurn = turningSpeed * 50; //Max turning speed
 const enemyMove = topMove * 1.5; //Enemy movement speed
 const enemyTurn = topTurn; //Enemy turning speed
-//Battle constants
 const initialEnemyCount = 100; //Semi-arbitrary
 const explosionSize = 2; //Semi-arbitrary
-const laserSpeed = 5; //laserSpeed is measured in laser-lengths per tick
-const laserSize = 0.04; //semi-arbitrary
+const laserSpeed = 5; //Measured in laser-lengths per tick //Semi-arbitrary
+const laserSize = 0.04; //Semi-arbitrary
 const fireCooldown = 100; //Ticks until next shot can be fired
 
 //Kill counter + controller memory initialization
-let enemiesKilled = 0;
+let enemyCount = initialEnemyCount;
 let movementBuffer = { tx: 0, ty: 0, tz: 0, rx: 0, ry: 0, rz: 0 };
-let fire = 0;
+let fireCountdown = 0;
 
-//Key reader
+//Key tracker
 let Keys = {};
 window.onkeydown = function(event) {
-    if (event.key == " ") {
-        Keys.space = true;
-    }
-    else {
-        Keys[event.key] = true;
-    }
+    Keys[event.key] = true;
 };
 window.onkeyup = function(event) {
-    if (event.key == " ") {
-        Keys.space = false;
-    }
-    else {
-        Keys[event.key] = false;
-    }
+    Keys[event.key] = false;
 };
 
 //Starting and ending screens
@@ -79,15 +67,12 @@ const Screens = {
         ctx.strokeStyle = "white";
         ctx.strokeText("YOU LOSE!", -canvas.width / 20, 0);
         ctx.strokeText("Reload the page to play again.", -canvas.width / 7, 30);
-        ctx.strokeText("Enemy ships destroyed: " + enemiesKilled, -canvas.width / 2, canvas.height / 2);
+        ctx.strokeText("Enemy ships destroyed: " + (initialEnemyCount - enemyCount), -canvas.width / 2, canvas.height / 2);
     }
 };
 
-
-
-
+//Primitive 3D objects to build the game models with
 const Primitives = {
-    //Constructor functions
     Vertex: function(x, y, z) {
         return {
             pos: [x, y, z],
@@ -122,14 +107,16 @@ const Primitives = {
                     Math.pow(this.pos[1] - vertex.pos[1], 2) +
                     Math.pow(this.pos[2] - vertex.pos[2], 2)
                 );
+            },
+            clone: function() {
+                return Primitives.Vertex(this.pos[0], this.pos[1], this.pos[2]);
             }
         };
     },
-
     Edge: function(vertex1, vertex2) {
         return {
-            start: Primitives.Vertex(vertex1.pos[0], vertex1.pos[1], vertex1.pos[2]),
-            end: Primitives.Vertex(vertex2.pos[0], vertex2.pos[1], vertex2.pos[2]),
+            start: vertex1.clone(),
+            end: vertex2.clone(),
             draw: function() {
                 if (this.start.visible() || this.end.visible()) {
                     ctx.beginPath();
@@ -149,25 +136,21 @@ const Primitives = {
             }
         };
     },
-
     Face: function(edges) {
         return {
             edges: edges.map(function(a) {
                 return Primitives.Edge(a.start, a.end);
             }),
-
             draw: function() {
                 this.edges.forEach(function(a) {
                     a.draw();
                 });
             },
-
             translate: function(x, y, z) {
                 this.edges.forEach(function(a) {
                     a.translate(x, y, z);
                 });
             },
-
             rotate: function(x, y, z) {
                 this.edges.forEach(function(a) {
                     a.rotate(x, y, z);
@@ -175,25 +158,21 @@ const Primitives = {
             }
         };
     },
-
     Polyhedron: function(faces) {
         return {
             faces: faces.map(function(a) {
                 return Primitives.Face(a.edges);
             }),
-
             draw: function() {
                 this.faces.forEach(function(a) {
                     a.draw();
                 });
             },
-
             translate: function(x, y, z) {
                 this.faces.forEach(function(a) {
                     a.translate(x, y, z);
                 });
             },
-
             rotate: function(x, y, z) {
                 this.faces.forEach(function(a) {
                     a.rotate(x, y, z);
@@ -201,7 +180,6 @@ const Primitives = {
             }
         };
     },
-
     Circle: function(x, y, z, size) {
         let vertex = Primitives.Vertex(x, y, z);
         vertex.draw = function() {
@@ -209,7 +187,7 @@ const Primitives = {
                 ctx.arc(
                     get2d(this.pos)[0],
                     get2d(this.pos)[1],
-                    size * dims.min / this.pos[2],
+                    size * minDim / this.pos[2],
                     0,
                     2 * Math.PI
                 );
@@ -219,27 +197,18 @@ const Primitives = {
         return vertex;
     }
 };
-
+//Get 2D position from 3D position by using (x/z, y/z)
 function get2d(pos) {
     if (pos[2] > 0 && pos[2] < renderDist) {
         return [
-            (pos[0] / pos[2]) * dims.min,
-            (pos[1] / pos[2]) * dims.min * -1
+            (pos[0] / pos[2]) * minDim,
+            (pos[1] / pos[2]) * minDim * -1
         ];
     }
     return [NaN, NaN];
 }
-const dims = {
-    min: Math.min(window.innerWidth, window.innerHeight),
-    bigX: Math.max(window.innerWidth - window.innerHeight, 0),
-    bigY: Math.max(window.innerHeight - window.innerWidth, 0)
-};
-
-
-
-
-
-
+//Minumum screen dimension
+const minDim = Math.min(window.innerWidth, window.innerHeight);
 
 //Models built off of the Primitives
 const Models = {
@@ -386,79 +355,71 @@ Screens.start();
 window.onclick = function loop() {
     //Control step
     //Translation
-    if (Keys.q) {
-        movementBuffer.ty -= move;
+    if (Keys["q"]) {
+        movementBuffer.ty -= movementSpeed;
     }
-    if (Keys.w) {
-        movementBuffer.tz -= move;
+    if (Keys["w"]) {
+        movementBuffer.tz -= movementSpeed;
     }
-    if (Keys.e) {
-        movementBuffer.ty += move;
+    if (Keys["e"]) {
+        movementBuffer.ty += movementSpeed;
     }
-    if (Keys.a) {
-        movementBuffer.tx += move;
+    if (Keys["a"]) {
+        movementBuffer.tx += movementSpeed;
     }
-    if (Keys.s) {
-        movementBuffer.tz += move;
+    if (Keys["s"]) {
+        movementBuffer.tz += movementSpeed;
     }
-    if (Keys.d) {
-        movementBuffer.tx -= move;
+    if (Keys["d"]) {
+        movementBuffer.tx -= movementSpeed;
     }
-
     //Rotation
-    if (Keys.u) {
-        movementBuffer.rz -= turn;
+    if (Keys["u"]) {
+        movementBuffer.rz -= turningSpeed;
     }
-    if (Keys.i) {
-        movementBuffer.rx += turn;
+    if (Keys["i"]) {
+        movementBuffer.rx += turningSpeed;
     }
-    if (Keys.o) {
-        movementBuffer.rz += turn;
+    if (Keys["o"]) {
+        movementBuffer.rz += turningSpeed;
     }
-    if (Keys.j) {
-        movementBuffer.ry += turn;
+    if (Keys["j"]) {
+        movementBuffer.ry += turningSpeed;
     }
-    if (Keys.k) {
-        movementBuffer.rx -= turn;
+    if (Keys["k"]) {
+        movementBuffer.rx -= turningSpeed;
     }
-    if (Keys.l) {
-        movementBuffer.ry -= turn;
+    if (Keys["l"]) {
+        movementBuffer.ry -= turningSpeed;
     }
-    if (fire > 0) {
-        fire--;
-    }
-
-    //Update world
+    //Move world around player
     World.forEach(function(a) {
         a.translate(movementBuffer.tx, movementBuffer.ty, movementBuffer.tz);
     });
     World.forEach(function(a) {
         a.rotate(movementBuffer.rx, movementBuffer.ry, movementBuffer.rz);
     });
-
     //Shooting
-    if (Keys.space && fire == 0) {
+    fireCountdown--;
+    fireCountdown = fireCountdown < 1 ? 0 : fireCountdown;
+    if (Keys[" "] && fireCountdown == 0) {
         World.push(Models.Laser(0, 0, 0, 0, 0, 1, laserSize));
         World[World.length - 1].label = "laser";
         World[World.length - 1].timer = 60 * 5;
-        fire = fireCooldown;
+        fireCountdown = fireCooldown;
     }
 
     //Slow down
     Object.getOwnPropertyNames(movementBuffer).map(function(name) {
         const val = movementBuffer[name];
         if (name.charAt(0) == "t") {
-            movementBuffer[name] -= (val > 0 ?
-                move / 2 :
-                (val < 0 ?
-                    -move / 2 :
-                    0));
+            movementBuffer[name] -= (val > 0 ? movementSpeed / 2 : (val < 0 ? -movementSpeed / 2 : 0));
         }
         else if (name.charAt(0) == "r") {
             movementBuffer[name] -= (val > 0 ?
-                turn / 2 :
+                turningSpeed / 2 :
                 (val < 0 ?
-                    -turn / 2 :
+                    -turningSpeed / 2 :
                     0));
         }
     });
@@ -515,7 +476,7 @@ window.onclick = function loop() {
                         return true;
                     }
                     else {
-                        enemiesKilled++;
+                        enemyCount--;
                         return false;
                     }
                 });
@@ -558,8 +519,6 @@ window.onclick = function loop() {
         }
     });
 
-
-
     //Display step
     ctx.fillStyle = "black";
     ctx.fillRect(-canvas.width / 2, -canvas.height / 2, canvas.width, canvas.height);
@@ -572,15 +531,15 @@ window.onclick = function loop() {
         a.draw();
     });
     //Show score
-    ctx.strokeText("Enemy ships destroyed: " + enemiesKilled, -canvas.width / 2, canvas.height / 2);
+    ctx.strokeText("Enemy ships destroyed: " + (initialEnemyCount - enemyCount), -canvas.width / 2, canvas.height / 2);
 
     //Win screen (once all enemies are killed)
-    if (enemiesKilled == 100) {
+    if (!enemyCount) {
         Screens.win();
         return;
     }
 
-    //Lose screen (if enemy is too close)
+    //Lose screen (if an enemy is too close)
     if (World.some(function(item) {
             return item.label == "ship" && new Primitives.Vertex(0, 0, 0).dist(item.faces[0].edges[0].start) < 1;
         })) {
