@@ -16,9 +16,25 @@ const enemyMove = topMove * 1.5; //Enemy movement speed
 const enemyTurn = topTurn; //Enemy turning speed
 const initialEnemyCount = 100; //Semi-arbitrary
 const explosionSize = 2; //Semi-arbitrary
-const laserSpeed = 5; //Measured in laser-lengths per tick //Semi-arbitrary
+const shipSize = 1;
 const laserSize = 0.04; //Semi-arbitrary
+const laserSpeed = 5; //Measured in laser-lengths per tick //Semi-arbitrary
+const laserDuration = 60 * 5; //Ticks till laser despawns //Semi-arbitrary
 const fireCooldown = 100; //Ticks until next shot can be fired
+const keyBinds = {
+    "q": "ty-",
+    "w": "tz-",
+    "e": "ty+",
+    "a": "tx+",
+    "s": "tz+",
+    "d": "tx-",
+    "u": "rz-",
+    "i": "rx+",
+    "o": "rz+",
+    "j": "ry+",
+    "k": "rx-",
+    "l": "ry-",
+};
 
 //Kill counter + controller memory initialization
 let enemyCount = initialEnemyCount;
@@ -27,12 +43,8 @@ let fireCountdown = 0;
 
 //Key tracker
 let Keys = {};
-window.onkeydown = function(event) {
-    Keys[event.key] = true;
-};
-window.onkeyup = function(event) {
-    Keys[event.key] = false;
-};
+window.onkeydown = function(event) { Keys[event.key] = true; };
+window.onkeyup = function(event) { Keys[event.key] = false; };
 
 //Starting and ending screens
 const Screens = {
@@ -339,12 +351,22 @@ for (let i = 0; i < 1e4; ++i) {
     World.push(Models.Star(
         (Math.random() - 0.5) * 100,
         (Math.random() - 0.5) * 100,
-        (Math.random() - 0.5) * 100));
+        (Math.random() - 0.5) * 100
+    ));
 }
 //Add enemy ships
 for (let i = 0; i < initialEnemyCount; ++i) {
-    const temp = Models.Ship((Math.random() - 0.5) * 100, (Math.random() - 0.5) * 100, (Math.random() - 0.5) * 100, 1);
-    temp.rotate((Math.random() - 0.5) * 100, (Math.random() - 0.5) * 100, (Math.random() - 0.5) * 100);
+    const temp = Models.Ship(
+        (Math.random() - 0.5) * 100,
+        (Math.random() - 0.5) * 100,
+        (Math.random() - 0.5) * 100,
+        shipSize
+    );
+    temp.rotate(
+        (Math.random() - 0.5) * 100,
+        (Math.random() - 0.5) * 100,
+        (Math.random() - 0.5) * 100
+    );
     temp.label = "ship";
     World.push(temp);
 }
@@ -354,99 +376,57 @@ Screens.start();
 //Start game loop on click
 window.onclick = function loop() {
     //Control step
-    //Translation
-    if (Keys["q"]) {
-        movementBuffer.ty -= movementSpeed;
-    }
-    if (Keys["w"]) {
-        movementBuffer.tz -= movementSpeed;
-    }
-    if (Keys["e"]) {
-        movementBuffer.ty += movementSpeed;
-    }
-    if (Keys["a"]) {
-        movementBuffer.tx += movementSpeed;
-    }
-    if (Keys["s"]) {
-        movementBuffer.tz += movementSpeed;
-    }
-    if (Keys["d"]) {
-        movementBuffer.tx -= movementSpeed;
-    }
-    //Rotation
-    if (Keys["u"]) {
-        movementBuffer.rz -= turningSpeed;
-    }
-    if (Keys["i"]) {
-        movementBuffer.rx += turningSpeed;
-    }
-    if (Keys["o"]) {
-        movementBuffer.rz += turningSpeed;
-    }
-    if (Keys["j"]) {
-        movementBuffer.ry += turningSpeed;
-    }
-    if (Keys["k"]) {
-        movementBuffer.rx -= turningSpeed;
-    }
-    if (Keys["l"]) {
-        movementBuffer.ry -= turningSpeed;
-    }
+    //Read controls and set movementBuffer
+    Object.getOwnPropertyNames(Keys).forEach(function(key) {
+        const qweasd = "qweasd".includes(key);
+        const uiojkl = "uiojkl".includes(key);
+        if (Keys[key] && (qweasd || uiojkl)) {
+            const val = keyBinds[key];
+            const accelScalar = qweasd ? movementSpeed : turningSpeed;
+            const accelVector = accelScalar * (val.charAt(2) == "+" ? 1 : -1);
+            const bufferKey = val.substring(0, 2);
+            movementBuffer[bufferKey] = movementBuffer[bufferKey] + accelVector;
+        }
+    });
     //Move world around player
     World.forEach(function(a) {
         a.translate(movementBuffer.tx, movementBuffer.ty, movementBuffer.tz);
-    });
-    World.forEach(function(a) {
         a.rotate(movementBuffer.rx, movementBuffer.ry, movementBuffer.rz);
     });
     //Shooting
     fireCountdown--;
-    fireCountdown = fireCountdown < 1 ? 0 : fireCountdown;
+    fireCountdown = Math.max(fireCountdown, 0);
     if (Keys[" "] && fireCountdown == 0) {
-        World.push(Models.Laser(0, 0, 0, 0, 0, 1, laserSize));
-        World[World.length - 1].label = "laser";
-        World[World.length - 1].timer = 60 * 5;
+        const temp = Models.Laser(0, 0, 0, 0, 0, 1, laserSize);
+        temp.label = "laser";
+        temp.timer = laserDuration;
+        World.push(temp);
         fireCountdown = fireCooldown;
     }
-
     //Slow down
-    Object.getOwnPropertyNames(movementBuffer).map(function(name) {
-        const val = movementBuffer[name];
-        if (name.charAt(0) == "t") {
-            movementBuffer[name] -= (val > 0 ? movementSpeed / 2 : (val < 0 ? -movementSpeed / 2 : 0));
-        }
-        else if (name.charAt(0) == "r") {
-            movementBuffer[name] -= (val > 0 ?
-                turningSpeed / 2 :
-                (val < 0 ?
-                    -turningSpeed / 2 :
-                    0));
-        }
+    Object.getOwnPropertyNames(movementBuffer).map(function(key) {
+        const val = movementBuffer[key];
+        const transformSpeed = key.charAt(0) == "t" ? movementSpeed : turningSpeed;
+        movementBuffer[key] -= (val > 0 ?
+            transformSpeed / 2 :
+            (val < 0 ?
+                -transformSpeed / 2 :
+                0));
     });
-
     //Limit speed
-    Object.getOwnPropertyNames(movementBuffer).map(function(name) {
-        const val = movementBuffer[name];
-        if (name.charAt(0) == "t") {
-            movementBuffer[name] = val > topMove ?
-                topMove :
-                (val < -topMove ?
-                    -topMove :
-                    val);
-        }
-        else if (name.charAt(0) == "r") {
-            movementBuffer[name] = val > topTurn ?
-                topTurn :
-                (val < -topTurn ?
-                    -topTurn :
-                    val);
-        }
+    Object.getOwnPropertyNames(movementBuffer).map(function(key) {
+        const val = movementBuffer[key];
+        const topTransfrom = key.charAt(0) == "t" ? topMove : topTurn;
+        movementBuffer[key] = val > topTransfrom ?
+            topTransfrom :
+            (val < -topTransfrom ?
+                -topTransfrom :
+                val);
     });
-
     //Stop if too slow
-    Object.getOwnPropertyNames(movementBuffer).map(function(name) {
-        const val = movementBuffer[name];
-        movementBuffer[name] = Math.abs(val) < 1e-4 ? 0 : val;
+    Object.getOwnPropertyNames(movementBuffer).map(function(key) {
+        const val = movementBuffer[key];
+        movementBuffer[key] = Math.abs(val) < 1e-4 ? 0 : val;
     });
 
 
